@@ -1,6 +1,6 @@
 namespace Strada.Notification.Domain.Enums;
 
-public enum TipoNotificacao
+public enum NotificationType
 {
     Sms = 1,
     Email = 2,

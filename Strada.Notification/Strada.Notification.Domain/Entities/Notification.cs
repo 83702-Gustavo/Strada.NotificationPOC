@@ -2,40 +2,51 @@ using Strada.Notification.Domain.Enums;
 
 namespace Strada.Notification.Domain.Entities;
 
-public class Notificacao
+public class Notification
 {
-    public Guid Id { get; private set; }
-    public string Destinatario { get; private set; }
-    public string Mensagem { get; private set; }
-    public TipoNotificacao Tipo { get; private set; }
-    public DateTime DataCriacao { get; private set; }
+    public Guid Id { get; private set; } 
+    public string Recipient { get; private set; } 
+    public string Message { get; private set; } 
+    public NotificationType Type { get; private set; } 
+    public string Provider { get; private set; } 
+    public DateTime CreatedAt { get; private set; } 
+    public DateTime? DeliveredAt { get; private set; } 
+    public string Status { get; private set; } 
 
-    public Notificacao(string destinatario, string mensagem, TipoNotificacao tipo)
+    public Notification(string recipient, string message, NotificationType type, string provider)
     {
-        if (string.IsNullOrWhiteSpace(destinatario))
-            throw new ArgumentException("O destinatário não pode ser nulo ou vazio.");
+        if (string.IsNullOrWhiteSpace(recipient))
+            throw new ArgumentException("Recipient cannot be null or empty.");
 
-        if (string.IsNullOrWhiteSpace(mensagem))
-            throw new ArgumentException("A mensagem não pode ser nula ou vazia.");
+        if (string.IsNullOrWhiteSpace(message))
+            throw new ArgumentException("Message cannot be null or empty.");
 
-        if (mensagem.Length > 500)
-            throw new ArgumentException("A mensagem não pode exceder 500 caracteres.");
+        if (message.Length > 500)
+            throw new ArgumentException("Message cannot exceed 500 characters.");
 
         Id = Guid.NewGuid();
-        Destinatario = destinatario;
-        Mensagem = mensagem;
-        Tipo = tipo;
-        DataCriacao = DateTime.UtcNow;
+        Recipient = recipient;
+        Message = message;
+        Type = type;
+        Provider = provider;
+        CreatedAt = DateTime.UtcNow;
+        Status = "Pending"; 
     }
 
-    public void AtualizarMensagem(string novaMensagem)
+    public void MarkAsDelivered()
     {
-        if (string.IsNullOrWhiteSpace(novaMensagem))
-            throw new ArgumentException("A mensagem não pode ser nula ou vazia.");
+        DeliveredAt = DateTime.UtcNow;
+        Status = "Delivered";
+    }
 
-        if (novaMensagem.Length > 500)
-            throw new ArgumentException("A mensagem não pode exceder 500 caracteres.");
+    public void MarkAsFailed(string errorMessage)
+    {
+        DeliveredAt = DateTime.UtcNow;
+        Status = $"Failed: {errorMessage}";
+    }
 
-        Mensagem = novaMensagem;
+    public override string ToString()
+    {
+        return $"Notification [Id={Id}, Recipient={Recipient}, Type={Type}, Status={Status}, CreatedAt={CreatedAt}, DeliveredAt={DeliveredAt}]";
     }
 }

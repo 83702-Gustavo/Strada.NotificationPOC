@@ -5,18 +5,18 @@ public class NotificationDbContext : DbContext
 {
     public NotificationDbContext(DbContextOptions<NotificationDbContext> options) : base(options) { }
 
-    public DbSet<Domain.Entities.Notificacao> Notifications { get; set; }
+    public DbSet<Domain.Entities.Notification> Notifications { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         
-        modelBuilder.Entity<Domain.Entities.Notificacao>(entity =>
+        modelBuilder.Entity<Domain.Entities.Notification>(entity =>
         {
             entity.HasKey(n => n.Id);
-            entity.Property(n => n.Destinatario).IsRequired();
-            entity.Property(n => n.Mensagem).HasMaxLength(500);
-            entity.Property(n => n.DataCriacao).IsRequired();
+            entity.Property(n => n.Recipient).IsRequired();
+            entity.Property(n => n.Message).HasMaxLength(500);
+            entity.Property(n => n.CreatedAt).IsRequired();
         });
     }
 }

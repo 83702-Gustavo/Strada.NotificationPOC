@@ -1,57 +1,63 @@
-using FirebaseAdmin;
-using FirebaseAdmin.Messaging;
-using Google.Apis.Auth.OAuth2;
-using Microsoft.Extensions.Configuration;
+using Strada.Notification.Application.Common;
 using Strada.Notification.Domain.Enums;
+using System.Net.Http.Json;
+using Strada.Notification.Application.Interfaces;
 using Strada.Notification.Domain.Interfaces;
 
-namespace Strada.Notification.Infrastructure.Providers
+namespace Strada.Notification.Infrastructure.Providers;
+
+public class PushProvider : INotificationProvider
 {
-    public class PushProvider : INotificationProvider
+    private readonly HttpClient _httpClient;
+    private readonly string _pushServiceUrl;
+    private readonly string _apiKey;
+
+    public PushProvider(HttpClient httpClient, string pushServiceUrl, string apiKey)
     {
-        private readonly FirebaseMessaging _firebaseMessaging;
+        _httpClient = httpClient;
+        _pushServiceUrl = pushServiceUrl;
+        _apiKey = apiKey;
+    }
 
-        public PushProvider(IConfiguration configuration)
+    public bool CanHandle(NotificationType type)
+    {
+        return type == NotificationType.Push;
+    }
+
+    public async Task<Result> SendAsync(string recipient, string message)
+    {
+        try
         {
-            // Inicializa o Firebase com as credenciais
-            var firebaseCredentialPath = configuration["PushSettings:FirebaseCredentialPath"];
-            if (string.IsNullOrWhiteSpace(firebaseCredentialPath))
+            var payload = new
             {
-                throw new ArgumentException("Firebase credentials path is not configured.");
-            }
-
-            FirebaseApp.Create(new AppOptions
-            {
-                Credential = GoogleCredential.FromFile(firebaseCredentialPath)
-            });
-
-            _firebaseMessaging = FirebaseMessaging.DefaultInstance;
-        }
-
-        public bool CanHandle(TipoNotificacao type) => type == TipoNotificacao.Push;
-
-        public async Task SendAsync(string recipient, string message)
-        {
-            try
-            {
-                var notification = new Message
+                to = recipient,
+                notification = new
                 {
-                    Token = recipient, 
-                    Notification = new FirebaseAdmin.Messaging.Notification
-                    {
-                        Title = "Nova Notificação",
-                        Body = message
-                    }
-                };
-                
-                var response = await _firebaseMessaging.SendAsync(notification);
-                Console.WriteLine($"Push enviado com sucesso. ID: {response}");
-            }
-            catch (Exception ex)
+                    title = "Strada Notification",
+                    body = message
+                }
+            };
+
+            var request = new HttpRequestMessage(HttpMethod.Post, _pushServiceUrl)
             {
-                Console.WriteLine($"Erro ao enviar push: {ex.Message}");
-                throw; 
+                Content = JsonContent.Create(payload)
+            };
+
+            request.Headers.Add("Authorization", $"Bearer {_apiKey}");
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return Result.Success();
             }
+
+            var error = await response.Content.ReadAsStringAsync();
+            return Result.Failure($"Push notification failed: {response.StatusCode} - {error}");
+        }
+        catch (Exception ex)
+        {
+            return Result.Failure($"An unexpected error occurred: {ex.Message}");
         }
     }
 }

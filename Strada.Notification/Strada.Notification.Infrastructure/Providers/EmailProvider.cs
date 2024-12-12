@@ -1,49 +1,63 @@
-using MailKit.Net.Smtp;
-using Microsoft.Extensions.Configuration;
-using MimeKit;
+using System.Net;
+using System.Net.Mail;
+using Strada.Notification.Application.Common;
+using Strada.Notification.Application.Interfaces;
 using Strada.Notification.Domain.Enums;
 using Strada.Notification.Domain.Interfaces;
 
 namespace Strada.Notification.Infrastructure.Providers;
+
 public class EmailProvider : INotificationProvider
 {
-    private readonly string _smtpServer;
-    private readonly int _port;
-    private readonly string _username;
-    private readonly string _password;
+    private readonly string _smtpHost;
+    private readonly int _smtpPort;
+    private readonly string _smtpUsername;
+    private readonly string _smtpPassword;
 
-    public EmailProvider(IConfiguration configuration)
+    public EmailProvider(string smtpHost, int smtpPort, string smtpUsername, string smtpPassword)
     {
-        _smtpServer = configuration["EmailSettings:SmtpServer"] ?? throw new ArgumentNullException("SMTP Server not configured.");
-        _port = int.Parse(configuration["EmailSettings:Port"] ?? "587");
-        _username = configuration["EmailSettings:Username"] ?? throw new ArgumentNullException("SMTP Username not configured.");
-        _password = configuration["EmailSettings:Password"] ?? throw new ArgumentNullException("SMTP Password not configured.");
+        _smtpHost = smtpHost;
+        _smtpPort = smtpPort;
+        _smtpUsername = smtpUsername;
+        _smtpPassword = smtpPassword;
     }
 
-    public bool CanHandle(TipoNotificacao type) => type == TipoNotificacao.Email;
+    public bool CanHandle(NotificationType type)
+    {
+        return type == NotificationType.Email;
+    }
 
-    public async Task SendAsync(string recipient, string message)
+    public async Task<Result> SendAsync(string recipient, string message)
     {
         try
         {
-            var emailMessage = new MimeMessage();
-            emailMessage.From.Add(new MailboxAddress("Strada Notification", _username));
-            emailMessage.To.Add(new MailboxAddress("", recipient));
-            emailMessage.Subject = "Nova Notificação";
-            emailMessage.Body = new TextPart("plain") { Text = message };
+            using var smtpClient = new SmtpClient(_smtpHost, _smtpPort)
+            {
+                Credentials = new NetworkCredential(_smtpUsername, _smtpPassword),
+                EnableSsl = true
+            };
 
-            using var smtpClient = new SmtpClient();
-            await smtpClient.ConnectAsync(_smtpServer, _port, MailKit.Security.SecureSocketOptions.StartTls);
-            await smtpClient.AuthenticateAsync(_username, _password);
-            await smtpClient.SendAsync(emailMessage);
-            await smtpClient.DisconnectAsync(true);
+            var mailMessage = new MailMessage
+            {
+                From = new MailAddress(_smtpUsername, "Strada Notifications"),
+                Subject = "Notification",
+                Body = message,
+                IsBodyHtml = false
+            };
 
-            Console.WriteLine($"Email enviado com sucesso para {recipient}.");
+            mailMessage.To.Add(recipient);
+
+            await smtpClient.SendMailAsync(mailMessage);
+
+            return Result.Success();
+        }
+        catch (SmtpException ex)
+        {
+            return Result.Failure($"SMTP error: {ex.Message}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Erro ao enviar email: {ex.Message}");
-            throw; 
+            return Result.Failure($"An unexpected error occurred: {ex.Message}");
         }
     }
 }

@@ -3,7 +3,9 @@ using Strada.Notification.Domain.Enums;
 
 namespace Strada.Notification.Application.Interfaces;
 
-public interface INotificacaoService
+public interface INotificationProvider
 {
-    Task<Result> EnviaNotificacaoAsync(TipoNotificacao type, string recipient, string message);
+    bool CanHandle(NotificationType type);
+
+    Task<Result> SendAsync(string recipient, string message);
 }

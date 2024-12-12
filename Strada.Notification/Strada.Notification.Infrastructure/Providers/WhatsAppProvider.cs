@@ -1,67 +1,52 @@
-using System.Net.Http.Json;
-using Microsoft.Extensions.Configuration;
+using Strada.Notification.Application.Common;
+using Strada.Notification.Application.Interfaces;
 using Strada.Notification.Domain.Enums;
-using Strada.Notification.Domain.Interfaces;
+using Twilio;
+using Twilio.Rest.Api.V2010.Account;
 
-namespace Strada.Notification.Infrastructure.Providers
+namespace Strada.Notification.Infrastructure.Providers;
+
+public class WhatsAppProvider : INotificationProvider
 {
-    public class WhatsAppProvider : INotificationProvider
+    private readonly string _accountSid;
+    private readonly string _authToken;
+    private readonly string _fromPhoneNumber;
+
+    public WhatsAppProvider(string accountSid, string authToken, string fromPhoneNumber)
     {
-        private readonly HttpClient _httpClient;
-        private readonly string _accessToken;
-        private readonly string _phoneNumberId;
+        _accountSid = accountSid ?? throw new ArgumentNullException(nameof(accountSid));
+        _authToken = authToken ?? throw new ArgumentNullException(nameof(authToken));
+        _fromPhoneNumber = $"whatsapp:{fromPhoneNumber}" ?? throw new ArgumentNullException(nameof(fromPhoneNumber));
+    }
 
-        public WhatsAppProvider(IConfiguration configuration, HttpClient httpClient)
+    public bool CanHandle(NotificationType type)
+    {
+        return type == NotificationType.WhatsApp;
+    }
+
+    public async Task<Result> SendAsync(string recipient, string message)
+    {
+        try
         {
-            _httpClient = httpClient;
+            TwilioClient.Init(_accountSid, _authToken);
 
-            _accessToken = configuration["WhatsAppSettings:AccessToken"] 
-                           ?? throw new ArgumentNullException("WhatsApp AccessToken is not configured.");
-            
-            _phoneNumberId = configuration["WhatsAppSettings:PhoneNumberId"] 
-                             ?? throw new ArgumentNullException("WhatsApp PhoneNumberId is not configured.");
+            var messageResource = await MessageResource.CreateAsync(
+                body: message,
+                from: new Twilio.Types.PhoneNumber(_fromPhoneNumber),
+                to: new Twilio.Types.PhoneNumber($"whatsapp:{recipient}")
+            );
+
+            if (messageResource.Status == MessageResource.StatusEnum.Failed ||
+                messageResource.Status == MessageResource.StatusEnum.Undelivered)
+            {
+                return Result.Failure($"Failed to send WhatsApp message: {messageResource.ErrorMessage}");
+            }
+
+            return Result.Success();
         }
-
-        public bool CanHandle(TipoNotificacao type) => type == TipoNotificacao.WhatsApp;
-
-        public async Task SendAsync(string recipient, string message)
+        catch (Exception ex)
         {
-            try
-            {
-                var requestUrl = $"https://graph.facebook.com/v16.0/{_phoneNumberId}/messages";
-
-                var requestBody = new
-                {
-                    messaging_product = "whatsapp",
-                    to = recipient,
-                    type = "text",
-                    text = new
-                    {
-                        body = message
-                    }
-                };
-
-                using var request = new HttpRequestMessage(HttpMethod.Post, requestUrl)
-                {
-                    Headers = { { "Authorization", $"Bearer {_accessToken}" } },
-                    Content = JsonContent.Create(requestBody)
-                };
-
-                var response = await _httpClient.SendAsync(request);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var error = await response.Content.ReadAsStringAsync();
-                    throw new InvalidOperationException($"Erro ao enviar WhatsApp: {error}");
-                }
-
-                Console.WriteLine($"WhatsApp enviado com sucesso para {recipient}.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Erro ao enviar mensagem pelo WhatsApp: {ex.Message}");
-                throw;
-            }
+            return Result.Failure($"An unexpected error occurred while sending WhatsApp message: {ex.Message}");
         }
     }
 }
