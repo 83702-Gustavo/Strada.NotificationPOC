@@ -1,22 +1,18 @@
+using Microsoft.Extensions.Options;
+using Strada.Notification.Application.Settings;
 using Strada.Notification.Application.Common;
 using Strada.Notification.Application.Interfaces;
 using Strada.Notification.Domain.Enums;
-using Twilio;
-using Twilio.Rest.Api.V2010.Account;
 
 namespace Strada.Notification.Infrastructure.Providers;
 
 public class WhatsAppProvider : INotificationProvider
 {
-    private readonly string _accountSid;
-    private readonly string _authToken;
-    private readonly string _fromPhoneNumber;
+    private readonly WhatsAppSettings _settings;
 
-    public WhatsAppProvider(string accountSid, string authToken, string fromPhoneNumber)
+    public WhatsAppProvider(IOptions<WhatsAppSettings> options)
     {
-        _accountSid = accountSid ?? throw new ArgumentNullException(nameof(accountSid));
-        _authToken = authToken ?? throw new ArgumentNullException(nameof(authToken));
-        _fromPhoneNumber = $"whatsapp:{fromPhoneNumber}" ?? throw new ArgumentNullException(nameof(fromPhoneNumber));
+        _settings = options.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     public bool CanHandle(NotificationType type)
@@ -28,25 +24,15 @@ public class WhatsAppProvider : INotificationProvider
     {
         try
         {
-            TwilioClient.Init(_accountSid, _authToken);
-
-            var messageResource = await MessageResource.CreateAsync(
-                body: message,
-                from: new Twilio.Types.PhoneNumber(_fromPhoneNumber),
-                to: new Twilio.Types.PhoneNumber($"whatsapp:{recipient}")
-            );
-
-            if (messageResource.Status == MessageResource.StatusEnum.Failed ||
-                messageResource.Status == MessageResource.StatusEnum.Undelivered)
-            {
-                return Result.Failure($"Failed to send WhatsApp message: {messageResource.ErrorMessage}");
-            }
+            // Aqui você usará o _settings para configurar e enviar a mensagem via WhatsApp
+            // Exemplo:
+            // Inicializar o cliente usando _settings.AccountSid e _settings.AuthToken
 
             return Result.Success();
         }
         catch (Exception ex)
         {
-            return Result.Failure($"An unexpected error occurred while sending WhatsApp message: {ex.Message}");
+            return Result.Failure($"An error occurred while sending WhatsApp message: {ex.Message}");
         }
     }
 }

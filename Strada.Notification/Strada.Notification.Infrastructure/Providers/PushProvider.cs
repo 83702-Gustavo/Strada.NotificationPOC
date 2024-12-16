@@ -1,22 +1,21 @@
+using Microsoft.Extensions.Options;
 using Strada.Notification.Application.Common;
-using Strada.Notification.Domain.Enums;
-using System.Net.Http.Json;
 using Strada.Notification.Application.Interfaces;
-using Strada.Notification.Domain.Interfaces;
+using Strada.Notification.Domain.Enums;
+using System.Text;
+using System.Text.Json;
 
 namespace Strada.Notification.Infrastructure.Providers;
 
 public class PushProvider : INotificationProvider
 {
+    private readonly PushSettings _settings;
     private readonly HttpClient _httpClient;
-    private readonly string _pushServiceUrl;
-    private readonly string _apiKey;
 
-    public PushProvider(HttpClient httpClient, string pushServiceUrl, string apiKey)
+    public PushProvider(IOptions<PushSettings> options, HttpClient httpClient)
     {
-        _httpClient = httpClient;
-        _pushServiceUrl = pushServiceUrl;
-        _apiKey = apiKey;
+        _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 
     public bool CanHandle(NotificationType type)
@@ -28,36 +27,40 @@ public class PushProvider : INotificationProvider
     {
         try
         {
+            // Payload para envio da notificação
             var payload = new
             {
                 to = recipient,
                 notification = new
                 {
-                    title = "Strada Notification",
+                    title = "New Notification",
                     body = message
                 }
             };
 
-            var request = new HttpRequestMessage(HttpMethod.Post, _pushServiceUrl)
+            // Serializa o payload para JSON
+            var jsonPayload = JsonSerializer.Serialize(payload);
+            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+            // Adiciona o cabeçalho de autorização
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _settings.ApiKey);
+
+            // Envia a requisição POST para o serviço de push
+            var response = await _httpClient.PostAsync(_settings.ServiceUrl, content);
+
+            // Verifica se a requisição foi bem-sucedida
+            if (!response.IsSuccessStatusCode)
             {
-                Content = JsonContent.Create(payload)
-            };
-
-            request.Headers.Add("Authorization", $"Bearer {_apiKey}");
-
-            var response = await _httpClient.SendAsync(request);
-
-            if (response.IsSuccessStatusCode)
-            {
-                return Result.Success();
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                return Result.Failure($"Failed to send push notification: {errorMessage}");
             }
 
-            var error = await response.Content.ReadAsStringAsync();
-            return Result.Failure($"Push notification failed: {response.StatusCode} - {error}");
+            return Result.Success();
         }
         catch (Exception ex)
         {
-            return Result.Failure($"An unexpected error occurred: {ex.Message}");
+            return Result.Failure($"An error occurred while sending push notification: {ex.Message}");
         }
     }
 }

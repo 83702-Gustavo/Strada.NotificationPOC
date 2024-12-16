@@ -1,5 +1,6 @@
 using Strada.Notification.Application.DTOs;
 using Strada.Notification.Domain.Entities;
+using Strada.Notification.Domain.Enums;
 
 namespace Strada.Notification.Application.Services;
 
@@ -22,10 +23,10 @@ public class ReportsService
         {
             NomeApp = app.Nome,
             TotalEnviadas = _notificacoes.Count(n => n.Recipient.StartsWith(app.Nome)), 
-            TotalEntregues = _notificacoes.Count(n => n.Recipient.StartsWith(app.Nome) && n.Status == "Entregue"),
-            TotalFalhas = _notificacoes.Count(n => n.Recipient.StartsWith(app.Nome) && n.Status.StartsWith("Falha")),
+            TotalEntregues = _notificacoes.Count(n => n.Recipient.StartsWith(app.Nome) && n.Status == NotificationStatus.Delivered),
+            TotalFalhas = _notificacoes.Count(n => n.Recipient.StartsWith(app.Nome) && n.Status == NotificationStatus.Failed),
             TempoMedioEntrega = _notificacoes
-                .Where(n => n.Recipient.StartsWith(app.Nome) && n.Status == "Entregue")
+                .Where(n => n.Recipient.StartsWith(app.Nome) && n.Status == NotificationStatus.Delivered)
                 .Average(n => (n.DeliveredAt - n.CreatedAt)?.TotalSeconds ?? 0)
         });
 
@@ -38,10 +39,10 @@ public class ReportsService
         {
             NomeProvedor = provedor.Name,
             TotalEnviadas = _notificacoes.Count(n => n.Provider == provedor.Name),
-            TotalEntregues = _notificacoes.Count(n => n.Provider == provedor.Name && n.Status == "Entregue"),
-            TotalFalhas = _notificacoes.Count(n => n.Provider == provedor.Name && n.Status.StartsWith("Falha")),
+            TotalEntregues = _notificacoes.Count(n => n.Provider == provedor.Name && n.Status == NotificationStatus.Delivered),
+            TotalFalhas = _notificacoes.Count(n => n.Provider == provedor.Name && n.Status == NotificationStatus.Failed),
             TempoMedioResposta = _notificacoes
-                .Where(n => n.Provider == provedor.Name && n.Status == "Entregue")
+                .Where(n => n.Provider == provedor.Name && n.Status == NotificationStatus.Delivered)
                 .Average(n => (n.DeliveredAt - n.CreatedAt)?.TotalSeconds ?? 0)
         });
 

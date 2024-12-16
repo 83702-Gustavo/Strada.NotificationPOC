@@ -3,47 +3,49 @@ using Strada.Notification.Domain.Entities;
 using Strada.Notification.Domain.Enums;
 using Strada.Notification.Domain.Interfaces;
 
-namespace Strada.Notification.Infrastructure.Persistence
+namespace Strada.Notification.Infrastructure.Persistence;
+
+public class NotificationRepository : INotificationRepository
 {
-    public class NotificationRepository : INotificationRepository
+    private readonly NotificationDbContext _context;
+
+    public NotificationRepository(NotificationDbContext context)
     {
-        private readonly NotificationDbContext _context;
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
 
-        public NotificationRepository(NotificationDbContext context)
-        {
-            _context = context;
-        }
+    public async Task AddAsync(Domain.Entities.Notification notification)
+    {
+        if (notification == null)
+            throw new ArgumentNullException(nameof(notification));
 
-        public async Task AddAsync(Domain.Entities.Notification notification)
-        {
-            await _context.Notifications.AddAsync(notification);
-            await _context.SaveChangesAsync();
-        }
+        await _context.Notifications.AddAsync(notification);
+        await _context.SaveChangesAsync();
+    }
 
-        public async Task<IEnumerable<Domain.Entities.Notification>> GetAllAsync()
-        {
-            return await _context.Notifications.ToListAsync();
-        }
+    public async Task UpdateAsync(Domain.Entities.Notification notification)
+    {
+        if (notification == null)
+            throw new ArgumentNullException(nameof(notification));
 
-        public async Task<Domain.Entities.Notification?> GetByIdAsync(Guid id)
-        {
-            return await _context.Notifications.FindAsync(id);
-        }
+        _context.Notifications.Update(notification);
+        await _context.SaveChangesAsync();
+    }
 
-        public async Task DeleteAsync(Guid id)
-        {
-            var notification = await _context.Notifications.FindAsync(id);
-            if (notification != null)
-            {
-                _context.Notifications.Remove(notification);
-                await _context.SaveChangesAsync();
-            }
-        }
+    public async Task<Domain.Entities.Notification?> GetByIdAsync(Guid id)
+    {
+        return await _context.Notifications.FirstOrDefaultAsync(n => n.Id == id);
+    }
 
-        public Task<IEnumerable<Domain.Entities.Notification>> ConsultarNotificacoesAsync(string? destinatario = null, NotificationType? tipo = null, DateTime? dataInicio = null,
-            DateTime? dataFim = null)
-        {
-            throw new NotImplementedException();
-        }
+    public async Task<IEnumerable<Domain.Entities.Notification>> GetAllAsync()
+    {
+        return await _context.Notifications.ToListAsync();
+    }
+
+    public async Task<IEnumerable<Domain.Entities.Notification>> GetByStatusAsync(NotificationStatus status)
+    {
+        return await _context.Notifications
+            .Where(n => n.Status == status)
+            .ToListAsync();
     }
 }

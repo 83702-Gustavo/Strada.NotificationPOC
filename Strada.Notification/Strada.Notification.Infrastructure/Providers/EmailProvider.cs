@@ -1,25 +1,20 @@
-using System.Net;
-using System.Net.Mail;
+using Microsoft.Extensions.Options;
 using Strada.Notification.Application.Common;
 using Strada.Notification.Application.Interfaces;
+using Strada.Notification.Application.Settings;
 using Strada.Notification.Domain.Enums;
-using Strada.Notification.Domain.Interfaces;
+using System.Net;
+using System.Net.Mail;
 
 namespace Strada.Notification.Infrastructure.Providers;
 
 public class EmailProvider : INotificationProvider
 {
-    private readonly string _smtpHost;
-    private readonly int _smtpPort;
-    private readonly string _smtpUsername;
-    private readonly string _smtpPassword;
+    private readonly EmailSettings _settings;
 
-    public EmailProvider(string smtpHost, int smtpPort, string smtpUsername, string smtpPassword)
+    public EmailProvider(IOptions<EmailSettings> options)
     {
-        _smtpHost = smtpHost;
-        _smtpPort = smtpPort;
-        _smtpUsername = smtpUsername;
-        _smtpPassword = smtpPassword;
+        _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     public bool CanHandle(NotificationType type)
@@ -31,33 +26,28 @@ public class EmailProvider : INotificationProvider
     {
         try
         {
-            using var smtpClient = new SmtpClient(_smtpHost, _smtpPort)
+            using var smtpClient = new SmtpClient(_settings.SmtpHost, _settings.SmtpPort)
             {
-                Credentials = new NetworkCredential(_smtpUsername, _smtpPassword),
+                Credentials = new NetworkCredential(_settings.SmtpUsername, _settings.SmtpPassword),
                 EnableSsl = true
             };
 
             var mailMessage = new MailMessage
             {
-                From = new MailAddress(_smtpUsername, "Strada Notifications"),
+                From = new MailAddress(_settings.SmtpUsername, "Strada Notifications"),
                 Subject = "Notification",
                 Body = message,
-                IsBodyHtml = false
+                IsBodyHtml = true
             };
-
             mailMessage.To.Add(recipient);
 
             await smtpClient.SendMailAsync(mailMessage);
 
             return Result.Success();
         }
-        catch (SmtpException ex)
-        {
-            return Result.Failure($"SMTP error: {ex.Message}");
-        }
         catch (Exception ex)
         {
-            return Result.Failure($"An unexpected error occurred: {ex.Message}");
+            return Result.Failure($"An error occurred while sending email: {ex.Message}");
         }
     }
 }

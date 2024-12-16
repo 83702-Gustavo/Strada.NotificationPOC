@@ -4,9 +4,14 @@ namespace Strada.Notification.Domain.Entities;
 
 public abstract class BaseEntity
 {
-    public Guid Id { get; private set; }
-    public DateTime CreatedAt { get; private set; }
-    public string CreatedBy { get; private set; }
+    public Guid Id { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string CreatedBy { get; set; }
+
+    public BaseEntity()
+    {
+        
+    }
 
     protected BaseEntity(string createdBy)
     {

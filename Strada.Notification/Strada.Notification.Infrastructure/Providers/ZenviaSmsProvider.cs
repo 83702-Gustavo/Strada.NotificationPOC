@@ -1,21 +1,32 @@
-using System.Net.Http.Json;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Strada.Notification.Application.Common;
 using Strada.Notification.Application.Interfaces;
+using Strada.Notification.Domain.Entities;
 using Strada.Notification.Domain.Enums;
+using Strada.Notification.Domain.Interfaces;
 
 namespace Strada.Notification.Infrastructure.Providers;
 
-public class ZenviaSmsProvider : INotificationProvider
+/// <summary>
+/// Provedor para envio de SMS usando a API da Zenvia.
+/// </summary>
+public class ZenviaSmsProvider : ISmsProvider
 {
+    private readonly IProviderSettingsRepository _settingsRepository;
     private readonly HttpClient _httpClient;
-    private readonly string _apiKey;
-    private readonly string _fromPhoneNumber;
+    private readonly ILogger<ZenviaSmsProvider> _logger;
 
-    public ZenviaSmsProvider(HttpClient httpClient, string apiKey, string fromPhoneNumber)
+    public string Name => "Zenvia";
+
+    public ZenviaSmsProvider(IProviderSettingsRepository settingsRepository, HttpClient httpClient, ILogger<ZenviaSmsProvider> logger)
     {
+        _settingsRepository = settingsRepository ?? throw new ArgumentNullException(nameof(settingsRepository));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _apiKey = apiKey ?? throw new ArgumentNullException(nameof(apiKey));
-        _fromPhoneNumber = fromPhoneNumber ?? throw new ArgumentNullException(nameof(fromPhoneNumber));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public bool CanHandle(NotificationType type)
@@ -23,40 +34,56 @@ public class ZenviaSmsProvider : INotificationProvider
         return type == NotificationType.Sms;
     }
 
-    public async Task<Result> SendAsync(string recipient, string message)
+    public async Task<Result> SendSmsAsync(string recipient, string message)
     {
+        // Recupera as configurações do provedor do repositório
+        var settings = await _settingsRepository.GetByNameAsync(Name);
+        if (settings == null || !settings.IsEnabled)
+        {
+            _logger.LogWarning("Zenvia provider is not enabled or configured.");
+            return Result.Failure("Zenvia provider is not enabled or configured.");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.ApiKey))
+        {
+            _logger.LogError("Zenvia API key is missing.");
+            return Result.Failure("Zenvia API key is missing.");
+        }
+
+        // Criação do payload para a API da Zenvia
+        var payload = new
+        {
+            from = "YourSenderName", // Substituir pelo remetente configurado
+            to = recipient,
+            contents = new[] { new { type = "text", text = message } }
+        };
+
+        var jsonPayload = JsonSerializer.Serialize(payload);
+        var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+
+        // Configuração da requisição
+        _httpClient.DefaultRequestHeaders.Clear();
+        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {settings.ApiKey}");
+
         try
         {
-            var payload = new
+            // Envia a requisição para a API da Zenvia
+            var response = await _httpClient.PostAsync("https://api.zenvia.com/v2/channels/sms/messages", content);
+
+            if (!response.IsSuccessStatusCode)
             {
-                from = _fromPhoneNumber,
-                to = recipient,
-                contents = new[]
-                {
-                    new { type = "text", text = message }
-                }
-            };
-
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://api.zenvia.com/v2/channels/sms/messages")
-            {
-                Content = JsonContent.Create(payload)
-            };
-
-            request.Headers.Add("Authorization", $"Bearer {_apiKey}");
-
-            var response = await _httpClient.SendAsync(request);
-
-            if (response.IsSuccessStatusCode)
-            {
-                return Result.Success();
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError($"Zenvia API responded with error: {response.StatusCode} - {errorContent}");
+                return Result.Failure($"Zenvia API error: {response.StatusCode} - {errorContent}");
             }
 
-            var error = await response.Content.ReadAsStringAsync();
-            return Result.Failure($"Zenvia SMS failed: {response.StatusCode} - {error}");
+            _logger.LogInformation("SMS sent successfully using Zenvia.");
+            return Result.Success();
         }
         catch (Exception ex)
         {
-            return Result.Failure($"An unexpected error occurred while sending SMS via Zenvia: {ex.Message}");
+            _logger.LogError(ex, "An exception occurred while sending SMS via Zenvia.");
+            return Result.Failure($"Zenvia exception: {ex.Message}");
         }
     }
 }

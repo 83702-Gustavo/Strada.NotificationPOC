@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Strada.Notification.Application.Services;
 using Strada.Notification.Application.DTOs;
+using Strada.Notification.Application.Interfaces;
 
 namespace Strada.Notification.API.Controllers;
 
@@ -8,66 +8,61 @@ namespace Strada.Notification.API.Controllers;
 [Route("api/[controller]")]
 public class SettingsController : ControllerBase
 {
-    private readonly SettingsService _settingsService;
+    private readonly ISettingsService _settingsService;
 
-    public SettingsController(SettingsService settingsService)
+    public SettingsController(ISettingsService settingsService)
     {
         _settingsService = settingsService;
     }
 
-    [HttpGet("providers")]
-    public IActionResult GetProviders()
+    [HttpGet]
+    public async Task<IActionResult> GetAllSettings()
     {
-        var providers = _settingsService.GetProviders();
-        return Ok(providers);
+        var result = await _settingsService.GetAllSettingsAsync();
+        return Ok(result);
     }
 
-    [HttpPost("providers/activate")]
-    public IActionResult ActivateProvider([FromBody] UpdateProviderStatusDto dto)
+    [HttpPost("create")]
+    public async Task<IActionResult> CreateProviderSettings([FromBody] CreateProviderSettingsDto createDto)
     {
-        _settingsService.ActivateProvider(dto.Name);
-        return Ok($"Provider '{dto.Name}' activated successfully.");
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _settingsService.AddProviderSettingsAsync(createDto);
+
+        if (result.IsSuccess)
+        {
+            return Ok("Provider settings created successfully.");
+        }
+
+        return BadRequest(result.ErrorMessage);
     }
 
-    [HttpPost("providers/deactivate")]
-    public IActionResult DeactivateProvider([FromBody] UpdateProviderStatusDto dto)
+    [HttpPut("update")]
+    public async Task<IActionResult> UpdateProviderSettings([FromBody] UpdateProviderSettingsDto updateDto)
     {
-        _settingsService.DeactivateProvider(dto.Name);
-        return Ok($"Provider '{dto.Name}' deactivated successfully.");
+        var result = await _settingsService.UpdateProviderSettingsAsync(updateDto);
+
+        if (result.IsSuccess)
+        {
+            return Ok("Provider settings updated successfully.");
+        }
+
+        return BadRequest(result.ErrorMessage);
     }
 
-    [HttpPut("providers/priority")]
-    public IActionResult UpdateProviderPriority([FromBody] UpdateProviderPriorityDto dto)
+    [HttpDelete("delete/{name}")]
+    public async Task<IActionResult> DeleteProviderSettings(string name)
     {
-        _settingsService.UpdateProviderPriority(dto.Name, dto.Priority);
-        return Ok($"Provider '{dto.Name}' priority updated to {dto.Priority}.");
-    }
+        var result = await _settingsService.DeleteProviderSettingsAsync(name);
 
-    [HttpGet("limits")]
-    public IActionResult GetLimits()
-    {
-        var limits = _settingsService.GetLimits();
-        return Ok(limits);
-    }
+        if (result.IsSuccess)
+        {
+            return Ok("Provider settings deleted successfully.");
+        }
 
-    [HttpPut("limits")]
-    public IActionResult UpdateLimits([FromBody] UpdateLimitsDto dto)
-    {
-        _settingsService.UpdateLimits(dto);
-        return Ok("Limits updated successfully.");
-    }
-
-    [HttpGet("security")]
-    public IActionResult GetSecuritySettings()
-    {
-        var security = _settingsService.GetSecuritySettings();
-        return Ok(security);
-    }
-
-    [HttpPut("security")]
-    public IActionResult UpdateSecuritySettings([FromBody] UpdateSecurityDto dto)
-    {
-        _settingsService.UpdateSecuritySettings(dto);
-        return Ok("Security settings updated successfully.");
+        return BadRequest(result.ErrorMessage);
     }
 }

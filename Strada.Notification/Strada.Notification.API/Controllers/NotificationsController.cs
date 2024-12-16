@@ -33,11 +33,28 @@ public class NotificationsController : ControllerBase
 
         return BadRequest(result.ErrorMessage);
     }
-    
+
     [HttpGet]
-    public async Task<IActionResult> GetNotifications()
+    public async Task<IActionResult> GetAllNotifications()
     {
         var notifications = await _notificationService.GetNotificationsAsync();
+        return Ok(notifications);
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetNotificationById(Guid id)
+    {
+        var notification = await _notificationService.GetNotificationByIdAsync(id);
+        if (notification == null)
+            return NotFound(new { Message = "Notification not found." });
+
+        return Ok(notification);
+    }
+
+    [HttpGet("status/{status}")]
+    public async Task<IActionResult> GetNotificationsByStatus(NotificationStatus status)
+    {
+        var notifications = await _notificationService.GetNotificationsByStatusAsync(status);
         return Ok(notifications);
     }
 }

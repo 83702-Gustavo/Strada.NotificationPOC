@@ -23,31 +23,40 @@ public class NotificationService : INotificationService
         var provider = _providers.FirstOrDefault(p => p.CanHandle(type));
         if (provider == null)
         {
-            return Result.Failure($"No provider found for notification type '{type}'.");
-        }
-
-        try
-        {
-            var sendResult = await provider.SendAsync(recipient, message);
-
-            if (!sendResult.IsSuccess)
-            {
-                return Result.Failure($"Notification failed: {sendResult.ErrorMessage}");
-            }
-
-            var notification = new Domain.Entities.Notification(recipient, message, type, provider.GetType().Name);
+            var notification = new Domain.Entities.Notification(recipient, message, type);
+            notification.MarkAsFailed("No provider available for the specified notification type.");
             await _repository.AddAsync(notification);
+            return Result.Failure("No provider available.");
+        }
 
-            return Result.Success();
-        }
-        catch (Exception ex)
+        var result = await provider.SendAsync(recipient, message);
+
+        var notificationToSave = new Domain.Entities.Notification(recipient, message, type);
+        if (result.IsSuccess)
         {
-            return Result.Failure($"An error occurred while sending the notification: {ex.Message}");
+            notificationToSave.MarkAsSent();
         }
+        else
+        {
+            notificationToSave.MarkAsFailed(result.ErrorMessage);
+        }
+
+        await _repository.AddAsync(notificationToSave);
+        return result;
     }
 
     public async Task<IEnumerable<Domain.Entities.Notification>> GetNotificationsAsync()
     {
         return await _repository.GetAllAsync();
+    }
+
+    public async Task<Domain.Entities.Notification?> GetNotificationByIdAsync(Guid id)
+    {
+        return await _repository.GetByIdAsync(id);
+    }
+
+    public async Task<IEnumerable<Domain.Entities.Notification>> GetNotificationsByStatusAsync(NotificationStatus status)
+    {
+        return await _repository.GetByStatusAsync(status);
     }
 }
